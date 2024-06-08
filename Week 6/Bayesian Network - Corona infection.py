@@ -1,70 +1,66 @@
 import pandas as pd
+import streamlit as st
+from pgmpy.models import BayesianModel
+from pgmpy.estimators import MaximumLikelihoodEstimator
+from pgmpy.inference import VariableElimination
 
-# Read the CSV file
-data = pd.read_csv('country_wise_latest.csv')
+# Streamlit app
+st.title("Heart Disease Prediction")
+st.write("This app predicts heart disease using a Bayesian Network.")
 
-# Create a DataFrame
-country_data = pd.DataFrame(data)
+# File uploader
+uploaded_file = st.file_uploader("Upload a CSV file", type="csv")
 
-# Print the first few rows of the DataFrame
-print(country_data.head())
+if uploaded_file is not None:
+    # Load data
+    data = pd.read_csv(uploaded_file)
+    heart_disease = pd.DataFrame(data)
+    st.write("### The first 5 values of data")
+    st.write(heart_disease.head())
 
-# Get the number of rows and columns in the DataFrame
-print(f"Number of rows: {country_data.shape[0]}")
-print(f"Number of columns: {country_data.shape[1]}")
+    # Define the Bayesian Model
+    model = BayesianModel([
+        ('age', 'Lifestyle'),
+        ('Gender', 'Lifestyle'),
+        ('Family', 'heartdisease'),
+        ('diet', 'cholestrol'),
+        ('Lifestyle', 'diet'),
+        ('cholestrol', 'heartdisease'),
+        ('diet', 'cholestrol')
+    ])
 
-# Get the column names
-print("\nColumn names:")
-print(country_data.columns)
+    # Fit the model using Maximum Likelihood Estimation
+    model.fit(heart_disease, estimator=MaximumLikelihoodEstimator)
 
-# Get the data types of the columns
-print("\nData types:")
-print(country_data.dtypes)
+    # Perform inference
+    HeartDisease_infer = VariableElimination(model)
 
-# Get the unique countries/regions
-print("\nUnique countries/regions:")
-print(country_data['Country/Region'].unique())
+    st.write("### Enter the following information for prediction:")
+    age = st.selectbox('Age', ['SuperSeniorCitizen', 'SeniorCitizen', 'MiddleAged', 'Youth', 'Teen'])
+    gender = st.selectbox('Gender', ['Male', 'Female'])
+    family_history = st.selectbox('Family History', ['Yes', 'No'])
+    diet = st.selectbox('Diet', ['High', 'Medium'])
+    lifestyle = st.selectbox('Lifestyle', ['Athlete', 'Active', 'Moderate', 'Sedentary'])
+    cholesterol = st.selectbox('Cholesterol', ['High', 'BorderLine', 'Normal'])
 
-# Get the total confirmed cases
-total_confirmed = country_data['Confirmed'].sum()
-print(f"\nTotal confirmed cases: {total_confirmed}")
+    age_mapping = {'SuperSeniorCitizen': 0, 'SeniorCitizen': 1, 'MiddleAged': 2, 'Youth': 3, 'Teen': 4}
+    gender_mapping = {'Male': 0, 'Female': 1}
+    family_history_mapping = {'Yes': 1, 'No': 0}
+    diet_mapping = {'High': 0, 'Medium': 1}
+    lifestyle_mapping = {'Athlete': 0, 'Active': 1, 'Moderate': 2, 'Sedentary': 3}
+    cholesterol_mapping = {'High': 0, 'BorderLine': 1, 'Normal': 2}
 
-# Get the total deaths
-total_deaths = country_data['Deaths'].sum()
-print(f"Total deaths: {total_deaths}")
+    if st.button("Predict"):
+        q = HeartDisease_infer.query(variables=['heartdisease'], evidence={
+            'age': age_mapping[age],
+            'Gender': gender_mapping[gender],
+            'Family': family_history_mapping[family_history],
+            'diet': diet_mapping[diet],
+            'Lifestyle': lifestyle_mapping[lifestyle],
+            'cholestrol': cholesterol_mapping[cholesterol]
+        })
 
-# Get the total recovered cases
-total_recovered = country_data['Recovered'].sum()
-print(f"Total recovered cases: {total_recovered}")
-
-# Calculate the mortality rate
-mortality_rate = (total_deaths / total_confirmed) * 100
-print(f"\nMortality rate: {mortality_rate:.2f}%")
-
-# Calculate the recovery rate
-recovery_rate = (total_recovered / total_confirmed) * 100
-print(f"Recovery rate: {recovery_rate:.2f}%")
-
-# Read the new dataset
-new_data = pd.read_csv('new_dataset.csv')
-new_data_df = pd.DataFrame(new_data)
-
-# Print the first few rows of the new dataset
-print("\nNew dataset:")
-print(new_data_df.head())
-
-# Get the number of rows and columns in the new dataset
-print(f"\nNumber of rows: {new_data_df.shape[0]}")
-print(f"Number of columns: {new_data_df.shape[1]}")
-
-# Get the column names of the new dataset
-print("\nColumn names:")
-print(new_data_df.columns)
-
-# Get the data types of the columns in the new dataset
-print("\nData types:")
-print(new_data_df.dtypes)
-
-# Get the unique values in the new dataset
-print("\nUnique values:")
-print(new_data_df['Column1'].unique())
+        st.write("### Prediction")
+        st.write(q['heartdisease'])
+else:
+    st.write("Please upload a CSV file.")
