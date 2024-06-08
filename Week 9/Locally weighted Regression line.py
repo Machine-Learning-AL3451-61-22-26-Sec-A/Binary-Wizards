@@ -1,57 +1,63 @@
-import streamlit as st
 import numpy as np
-from scipy import linalg
+import pandas as pd
+import streamlit as st
 
-def lowess(x, y, f, iterations):
-    n = len(x)
-    r = int(np.ceil(f * n))
-    h = [np.sort(np.abs(x - x[i]))[r] for i in range(n)]
-    w = np.clip(np.abs((x[:, None] - x[None, :]) / h), 0.0, 1.0)
-    w = (1 - w * 3) * 3
-    yest = np.zeros(n)
-    delta = np.ones(n)
-    for iteration in range(iterations):
-        for i in range(n):
-            weights = delta * w[:, i]
-            b = np.array([np.sum(weights * y), np.sum(weights * y * x)])
-            A = np.array([[np.sum(weights), np.sum(weights * x)],
-                          [np.sum(weights * x), np.sum(weights * x * x)]])
-            beta = linalg.solve(A, b)
-            yest[i] = beta[0] + beta[1] * x[i]
+# Function to compute weights
+def get_weights(X, x_query, tau):
+    m = X.shape[0]
+    W = np.eye(m)
+    for i in range(m):
+        xi = X[i]
+        W[i, i] = np.exp(-np.dot((xi - x_query), (xi - x_query).T) / (2 * tau ** 2))
+    return W
 
-        residuals = y - yest
-        s = np.median(np.abs(residuals))
-        delta = np.clip(residuals / (6.0 * s), -1, 1)
-        delta = (1 - delta * 2) * 2
+# Locally Weighted Regression function
+def locally_weighted_regression(X, y, x_query, tau):
+    X_ = np.c_[np.ones((X.shape[0], 1)), X]  # Add intercept term
+    x_query_ = np.r_[1, x_query]  # Add intercept term
+    W = get_weights(X_, x_query_, tau)
+    theta = np.linalg.pinv(X_.T @ W @ X_) @ (X_.T @ W @ y)
+    return np.dot(x_query_, theta)
 
-    return yest
+# Streamlit App
+st.title("Locally Weighted Regression")
 
-def main():
-    st.title('Locally Weighted Regression (Lowess)')
+# Upload dataset
+uploaded_file = st.file_uploader("Upload your CSV file", type=["csv"])
+if uploaded_file is not None:
+    data = pd.read_csv(uploaded_file)
+    st.write(data.head())
 
-    # User input for smoothing parameter 'f' and number of iterations
-    f = st.slider('Smoothing Parameter (f)', min_value=0.01, max_value=1.0, value=0.25, step=0.01)
-    iterations = st.slider('Number of Iterations', min_value=1, max_value=10, value=3, step=1)
+    # Select feature and target columns
+    feature_col = st.selectbox("Select Feature Column", data.columns)
+    target_col = st.selectbox("Select Target Column", data.columns)
 
-    # Generate sample data
-    n = 100
-    x = np.linspace(0, 2 * np.pi, n)
-    y = np.sin(x) + 0.3 * np.random.randn(n)
+    # Get X and y values
+    X = data[[feature_col]].values
+    y = data[target_col].values
 
-    # Perform lowess regression
-    yest = lowess(x, y, f, iterations)
+    # Input value for bandwidth parameter tau
+    tau = st.slider("Select Tau (Bandwidth)", 0.01, 1.0, 0.1)
 
-    # Plot the original data and the lowess regression curve
-    st.pyplot(plot_data(x, y, yest))
+    # Generate predictions
+    X_test = np.linspace(X.min(), X.max(), 300).reshape(-1, 1)
+    y_pred = [locally_weighted_regression(X, y, x_query, tau) for x_query in X_test]
 
-def plot_data(x, y, yest):
-    import matplotlib.pyplot as plt
-    plt.plot(x, y, 'r.', label='Original Data')
-    plt.plot(x, yest, 'b-', label='Lowess Regression')
-    plt.xlabel('x')
-    plt.ylabel('y')
-    plt.legend()
-    return plt
+    # Prepare data for plotting
+    plot_data = pd.DataFrame({
+        feature_col: X_test.flatten(),
+        'LWR Fit': np.array(y_pred).flatten()
+    })
 
-if _name_ == '_main_':
-    main()
+    # Plotting
+    st.line_chart(plot_data.rename(columns={'LWR Fit': target_col}), x=feature_col, y=target_col)
+    scatter_data = pd.DataFrame({
+        feature_col: X.flatten(),
+        target_col: y.flatten()
+    })
+    st.scatter_chart(scatter_data)
+
+    st.write("### Combined Plot")
+    combined_data = pd.concat([plot_data.set_index(feature_col), scatter_data.set_index(feature_col)], axis=1).reset_index()
+    combined_data.columns = [feature_col, 'LWR Fit', 'Actual']  # Rename columns to avoid conflicts
+    st.line_chart(combined_data, x=feature_col, y=['LWR Fit', 'Actual'])
