@@ -1,81 +1,78 @@
-# streamlit_app.py
-
+import numpy as np
 import streamlit as st
-import pandas as pd
-from sklearn import tree
-from sklearn.preprocessing import LabelEncoder
-from sklearn.naive_bayes import GaussianNB
-from sklearn.model_selection import train_test_split
-from sklearn.metrics import accuracy_score
 
-# Title for the Streamlit app
-st.title("Tennis Match Prediction App")
+class Neural_Network(object):
+    def __init__(self):
+        # Parameters
+        self.inputSize = 2
+        self.outputSize = 1
+        self.hiddenSize = 3
+        # Weights
+        self.W1 = np.random.randn(self.inputSize, self.hiddenSize)
+        self.W2 = np.random.randn(self.hiddenSize, self.outputSize)
 
-# File uploader to load data
-uploaded_file = st.file_uploader("Upload your tennis dataset (CSV file)", type="csv")
+    def forward(self, X):
+        # Forward propagation through the network
+        self.z = np.dot(X, self.W1)
+        self.z2 = self.sigmoid(self.z)
+        self.z3 = np.dot(self.z2, self.W2)
+        o = self.sigmoid(self.z3)
+        return o
 
-if uploaded_file is not None:
-    # Read the data from CSV
-    data = pd.read_csv(uploaded_file)
-    st.write("The first 5 values of data are:")
-    st.write(data.head())
+    def sigmoid(self, s):
+        return 1 / (1 + np.exp(-s))
+
+    def sigmoidPrime(self, s):
+        return s * (1 - s)
     
-    # Obtain Train data and Train output
-    X = data.iloc[:,:-1]
-    y = data.iloc[:,-1]
+    def backward(self, X, y, o):
+        # Backward propagate through the network
+        self.o_error = y - o
+        self.o_delta = self.o_error * self.sigmoidPrime(o)
+        self.z2_error = self.o_delta.dot(self.W2.T)
+        self.z2_delta = self.z2_error * self.sigmoidPrime(self.z2)
+        self.W1 += X.T.dot(self.z2_delta)
+        self.W2 += self.z2.T.dot(self.o_delta)
 
-    # Convert categorical features to numerical values
-    le_outlook = LabelEncoder()
-    X.Outlook = le_outlook.fit_transform(X.Outlook)
+    def train(self, X, y):
+        o = self.forward(X)
+        self.backward(X, y, o)
 
-    le_Temperature = LabelEncoder()
-    X.Temperature = le_Temperature.fit_transform(X.Temperature)
+# Sample data
+X = np.array(([2, 9], [1, 5], [3, 6]), dtype=float)
+y = np.array(([92], [86], [89]), dtype=float)
 
-    le_Humidity = LabelEncoder()
-    X.Humidity = le_Humidity.fit_transform(X.Humidity)
+# Scale units
+X = X / np.amax(X, axis=0)
+y = y / 100
 
-    le_Windy = LabelEncoder()
-    X.Windy = le_Windy.fit_transform(X.Windy)
+# Instantiate the neural network
+NN = Neural_Network()
 
-    le_PlayTennis = LabelEncoder()
-    y = le_PlayTennis.fit_transform(y)
+# Streamlit app
+st.title("Simple Neural Network")
+st.write("This is a simple neural network with one hidden layer.")
 
-    st.write("Now the Train data is:")
-    st.write(X.head())
+st.write("### Input Data")
+st.write(X)
 
-    st.write("Now the Train output is:")
-    st.write(y)
+st.write("### Actual Output")
+st.write(y)
 
-    # Split the data
-    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.20, random_state=42)
+predicted_output = NN.forward(X)
+st.write("### Predicted Output")
+st.write(predicted_output)
 
-    # Train the classifier
-    classifier = GaussianNB()
-    classifier.fit(X_train, y_train)
+loss = np.mean(np.square(y - predicted_output))
+st.write("### Loss")
+st.write(loss)
 
-    # Display accuracy
-    accuracy = accuracy_score(classifier.predict(X_test), y_test)
-    st.write("Accuracy is:", accuracy)
-
-    # Allow user to input new data for prediction
-    st.write("Enter new data to make a prediction:")
-
-    new_outlook = st.selectbox("Outlook", le_outlook.classes_)
-    new_temperature = st.selectbox("Temperature", le_Temperature.classes_)
-    new_humidity = st.selectbox("Humidity", le_Humidity.classes_)
-    new_windy = st.selectbox("Windy", le_Windy.classes_)
-
-    if st.button("Predict"):
-        new_data = pd.DataFrame({
-            'Outlook': [le_outlook.transform([new_outlook])[0]],
-            'Temperature': [le_Temperature.transform([new_temperature])[0]],
-            'Humidity': [le_Humidity.transform([new_humidity])[0]],
-            'Windy': [le_Windy.transform([new_windy])[0]]
-        })
-
-        prediction = classifier.predict(new_data)
-        prediction_label = le_PlayTennis.inverse_transform(prediction)
-        st.write("Prediction:", prediction_label[0])
-
-# To run the app, use the command `streamlit run streamlit_app.py`
-streamlit run streamlit_app.py
+if st.button("Train Network"):
+    NN.train(X, y)
+    st.write("Network Trained!")
+    predicted_output = NN.forward(X)
+    st.write("### New Predicted Output")
+    st.write(predicted_output)
+    loss = np.mean(np.square(y - predicted_output))
+    st.write("### New Loss")
+    st.write(loss)
