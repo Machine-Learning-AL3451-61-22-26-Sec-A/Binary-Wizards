@@ -1,78 +1,65 @@
-import numpy as np
+import pandas as pd
 import streamlit as st
-
-class Neural_Network(object):
-    def __init__(self):
-        # Parameters
-        self.inputSize = 2
-        self.outputSize = 1
-        self.hiddenSize = 3
-        # Weights
-        self.W1 = np.random.randn(self.inputSize, self.hiddenSize)
-        self.W2 = np.random.randn(self.hiddenSize, self.outputSize)
-
-    def forward(self, X):
-        # Forward propagation through the network
-        self.z = np.dot(X, self.W1)
-        self.z2 = self.sigmoid(self.z)
-        self.z3 = np.dot(self.z2, self.W2)
-        o = self.sigmoid(self.z3)
-        return o
-
-    def sigmoid(self, s):
-        return 1 / (1 + np.exp(-s))
-
-    def sigmoidPrime(self, s):
-        return s * (1 - s)
-    
-    def backward(self, X, y, o):
-        # Backward propagate through the network
-        self.o_error = y - o
-        self.o_delta = self.o_error * self.sigmoidPrime(o)
-        self.z2_error = self.o_delta.dot(self.W2.T)
-        self.z2_delta = self.z2_error * self.sigmoidPrime(self.z2)
-        self.W1 += X.T.dot(self.z2_delta)
-        self.W2 += self.z2.T.dot(self.o_delta)
-
-    def train(self, X, y):
-        o = self.forward(X)
-        self.backward(X, y, o)
-
-# Sample data
-X = np.array(([2, 9], [1, 5], [3, 6]), dtype=float)
-y = np.array(([92], [86], [89]), dtype=float)
-
-# Scale units
-X = X / np.amax(X, axis=0)
-y = y / 100
-
-# Instantiate the neural network
-NN = Neural_Network()
+from sklearn import tree
+from sklearn.preprocessing import LabelEncoder
+from sklearn.naive_bayes import GaussianNB
+from sklearn.model_selection import train_test_split
+from sklearn.metrics import accuracy_score
 
 # Streamlit app
-st.title("Simple Neural Network")
-st.write("This is a simple neural network with one hidden layer.")
+st.title("Tennis Data Classifier")
+st.write("This app classifies tennis play data using a Gaussian Naive Bayes classifier.")
 
-st.write("### Input Data")
-st.write(X)
+# File uploader
+uploaded_file = st.file_uploader("Upload a CSV file", type="csv")
 
-st.write("### Actual Output")
-st.write(y)
+if uploaded_file is not None:
+    # Load data
+    data = pd.read_csv(uploaded_file)
+    st.write("### The first 5 values of data")
+    st.write(data.head())
 
-predicted_output = NN.forward(X)
-st.write("### Predicted Output")
-st.write(predicted_output)
+    # Obtain Train data and Train output
+    X = data.iloc[:, :-1]
+    y = data.iloc[:, -1]
+    
+    st.write("### The first 5 values of train data")
+    st.write(X.head())
+    
+    st.write("### The first 5 values of Train output")
+    st.write(y.head())
 
-loss = np.mean(np.square(y - predicted_output))
-st.write("### Loss")
-st.write(loss)
+    # Convert categorical variables to numbers
+    le_outlook = LabelEncoder()
+    X['Outlook'] = le_outlook.fit_transform(X['Outlook'])
 
-if st.button("Train Network"):
-    NN.train(X, y)
-    st.write("Network Trained!")
-    predicted_output = NN.forward(X)
-    st.write("### New Predicted Output")
-    st.write(predicted_output)
-    loss = np.mean(np.square(y - predicted_output))
-    st.write("### New Loss")
-    st.write(loss)
+    le_Temperature = LabelEncoder()
+    X['Temperature'] = le_Temperature.fit_transform(X['Temperature'])
+
+    le_Humidity = LabelEncoder()
+    X['Humidity'] = le_Humidity.fit_transform(X['Humidity'])
+
+    le_Windy = LabelEncoder()
+    X['Windy'] = le_Windy.fit_transform(X['Windy'])
+
+    st.write("### Now the Train data is")
+    st.write(X.head())
+
+    le_PlayTennis = LabelEncoder()
+    y = le_PlayTennis.fit_transform(y)
+    
+    st.write("### Now the Train output is")
+    st.write(y)
+
+    # Split the data
+    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.20, random_state=42)
+
+    # Train the classifier
+    classifier = GaussianNB()
+    classifier.fit(X_train, y_train)
+
+    # Calculate accuracy
+    accuracy = accuracy_score(classifier.predict(X_test), y_test)
+    st.write("### Accuracy is:", accuracy)
+else:
+    st.write("Please upload a CSV file.")
